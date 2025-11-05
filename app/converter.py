@@ -53,6 +53,7 @@ async def run_libreoffice_convert(input_path: str, output_dir: str, convert_to: 
         *args,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        start_new_session=True,  # ensure soffice becomes a new session leader; its children join same group
     )
 
     stdout_text = ""
@@ -66,13 +67,30 @@ async def run_libreoffice_convert(input_path: str, output_dir: str, convert_to: 
         if stderr_text:
             log.info(f"LibreOffice stderr: {stderr_text}")
     except asyncio.TimeoutError:
-        log.warning("Conversion timeout. Killing LibreOffice process.")
+        log.warning("Conversion timeout. Terminating LibreOffice process group.")
+        pgid = None
         with contextlib.suppress(ProcessLookupError):
-            proc.kill()
+            try:
+                pgid = os.getpgid(proc.pid)
+            except Exception:
+                pgid = None
+        # First try SIGTERM on the whole group
+        with contextlib.suppress(ProcessLookupError):
+            if pgid and hasattr(os, "killpg"):
+                os.killpg(pgid, signal.SIGTERM)
+            else:
+                proc.terminate()
         try:
             await asyncio.wait_for(proc.wait(), timeout=5)
         except asyncio.TimeoutError:
-            log.error("Process did not terminate quickly after kill.")
+            log.warning("Process group did not terminate after SIGTERM; issuing SIGKILL.")
+            with contextlib.suppress(ProcessLookupError):
+                if pgid and hasattr(os, "killpg"):
+                    os.killpg(pgid, signal.SIGKILL)
+                else:
+                    proc.kill()
+            with contextlib.suppress(asyncio.TimeoutError):
+                await asyncio.wait_for(proc.wait(), timeout=3)
         raise RuntimeError("Conversion timed out")
     finally:
         # Clean up the per-job user profile directory
