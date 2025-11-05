@@ -1,0 +1,47 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Runtime artifacts
+logs/
+data/
+tmp/
+*.log
+
+# Packaging/build
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Testing/coverage
+.coverage*
+htmlcov/
+.pytest_cache/
+.tox/
+.nox/
+
+# Type checking and lint
+.mypy_cache/
+.pytype/
+ruff_cache/
+
+# IDE/editor
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# Environment files
+.env
+.env.*
+.envrc

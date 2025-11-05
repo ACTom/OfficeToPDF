@@ -1,0 +1,22 @@
+version: "3.8"
+services:
+  officetopdf:
+    build: .
+    container_name: officetopdf
+    environment:
+      - APIKEY=${APIKEY:-changeme}
+      - CONVERT_TIMEOUT=${CONVERT_TIMEOUT:-600}
+      - MAX_CONCURRENCY=${MAX_CONCURRENCY:-2}
+      - CLEANUP_AFTER_SECONDS=${CLEANUP_AFTER_SECONDS:-3600}
+      - LOG_DIR=${LOG_DIR:-/tmp/o2plog}
+      - DATA_DIR=${DATA_DIR:-/tmp/o2pdata}
+    ports:
+      - "8000:8000"
+    volumes:
+      - logs:/tmp/o2plog
+      - data:/tmp/o2pdata
+    restart: unless-stopped
+
+volumes:
+  logs:
+  data:
