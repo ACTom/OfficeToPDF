@@ -1,19 +1,24 @@
-FROM python:3.12-slim
+FROM python:3.12-slim-trixie
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# Install LibreOffice and fonts
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libreoffice \
-    fonts-dejavu-core \
-    fonts-noto \
-    fonts-noto-cjk \
-    fonts-noto-cjk-extra \
-    fonts-noto-color-emoji \
-    fonts-wqy-microhei \
-    fonts-wqy-zenhei \
-    fontconfig \
+# Install LibreOffice 26.2.x (native Markdown support) from trixie-backports,
+# plus fonts. trixie-backports ships LibreOffice 26.2.x for both amd64 and arm64,
+# so the multi-arch build keeps working.
+RUN echo "deb http://deb.debian.org/debian trixie-backports main" > /etc/apt/sources.list.d/backports.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends -t trixie-backports \
+        libreoffice \
+    && apt-get install -y --no-install-recommends \
+        fonts-dejavu-core \
+        fonts-noto \
+        fonts-noto-cjk \
+        fonts-noto-cjk-extra \
+        fonts-noto-color-emoji \
+        fonts-wqy-microhei \
+        fonts-wqy-zenhei \
+        fontconfig \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
