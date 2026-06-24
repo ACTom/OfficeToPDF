@@ -80,28 +80,26 @@ async def run_libreoffice_convert(input_path: str, output_dir: str, convert_to: 
         if stderr_text:
             log.info(f"LibreOffice stderr: {stderr_text}")
     except asyncio.TimeoutError:
-        log.warning("Conversion timeout. Terminating LibreOffice process group.")
-        pgid = None
-        with contextlib.suppress(ProcessLookupError):
-            try:
-                pgid = os.getpgid(proc.pid)
-            except Exception:
-                pgid = None
-        # First try SIGTERM on the whole group
-        with contextlib.suppress(ProcessLookupError):
-            if pgid and hasattr(os, "killpg"):
-                os.killpg(pgid, signal.SIGTERM)
-            else:
-                proc.terminate()
+        log.warning("Conversion timeout. Killing LibreOffice process group.")
+        # start_new_session=True makes proc the process-group leader, so the
+        # PGID equals proc.pid. Signal the PGID directly instead of relying on
+        # os.getpgid(): the soffice launcher (oosplash) frequently exits while
+        # its soffice.bin child keeps running, and getpgid() on the dead launcher
+        # raises ProcessLookupError -- which previously left that child orphaned
+        # and running forever. A process group lives as long as any member does,
+        # so killpg(proc.pid) still reaches soffice.bin after the launcher exits.
+        def _killpg(sig):
+            with contextlib.suppress(ProcessLookupError):
+                if hasattr(os, "killpg"):
+                    os.killpg(proc.pid, sig)
+                else:
+                    proc.send_signal(sig)
+        _killpg(signal.SIGTERM)
         try:
             await asyncio.wait_for(proc.wait(), timeout=5)
         except asyncio.TimeoutError:
-            log.warning("Process group did not terminate after SIGTERM; issuing SIGKILL.")
-            with contextlib.suppress(ProcessLookupError):
-                if pgid and hasattr(os, "killpg"):
-                    os.killpg(pgid, signal.SIGKILL)
-                else:
-                    proc.kill()
+            log.warning("Process group survived SIGTERM; issuing SIGKILL.")
+            _killpg(signal.SIGKILL)
             with contextlib.suppress(asyncio.TimeoutError):
                 await asyncio.wait_for(proc.wait(), timeout=3)
         raise RuntimeError("Conversion timed out")

@@ -11,6 +11,7 @@ RUN echo "deb http://deb.debian.org/debian trixie-backports main" > /etc/apt/sou
     && apt-get install -y --no-install-recommends -t trixie-backports \
         libreoffice \
     && apt-get install -y --no-install-recommends \
+        tini \
         fonts-dejavu-core \
         fonts-noto \
         fonts-noto-cjk \
@@ -41,4 +42,7 @@ ENV APIKEY=changeme \
 
 EXPOSE 8000
 
+# Run under tini as PID 1 so orphaned soffice.bin children get reaped instead of
+# piling up as <defunct> zombies (uvicorn as PID 1 only reaps its own children).
+ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
