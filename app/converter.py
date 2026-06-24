@@ -15,11 +15,24 @@ from .logger import setup_logger
 log = setup_logger("converter")
 
 
-def _find_output_pdf(input_path: str, output_dir: str) -> Optional[str]:
+def _target_extension(convert_to: Optional[str]) -> str:
+    """Derive the output file extension from a --convert-to value.
+
+    Format is "<ext>" or "<ext>:<FilterName>" (e.g. "pdf",
+    "pdf:writer_pdf_Export", "html:XHTML Calc File"). Defaults to "pdf".
+    """
+    if not convert_to:
+        return "pdf"
+    ext = convert_to.split(":", 1)[0].strip().lower()
+    return ext or "pdf"
+
+
+def _find_output_file(input_path: str, output_dir: str, ext: str) -> Optional[str]:
     base = os.path.splitext(os.path.basename(input_path))[0]
     # LibreOffice places output in output_dir with same base name and target extension
+    suffix = "." + ext.lower()
     for name in os.listdir(output_dir):
-        if name.startswith(base) and name.lower().endswith(".pdf"):
+        if name.startswith(base) and name.lower().endswith(suffix):
             return os.path.join(output_dir, name)
     return None
 
@@ -101,7 +114,7 @@ async def run_libreoffice_convert(input_path: str, output_dir: str, convert_to: 
         details = (stderr_text or stdout_text or "Unknown error").strip()
         raise RuntimeError(f"LibreOffice failed (code {proc.returncode}): {details}")
 
-    out = _find_output_pdf(input_path, output_dir)
+    out = _find_output_file(input_path, output_dir, _target_extension(convert_to))
     if not out:
         # Even when return code is 0, LibreOffice may log errors and produce no file.
         # Bubble up those details to the caller.
