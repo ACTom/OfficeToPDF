@@ -1,22 +1,42 @@
 import asyncio
+import contextlib
 import os
 import time
+from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
-from fastapi.staticfiles import StaticFiles
 
 from .auth import require_api_key
 from .config import DATA_DIR, CLEANUP_AFTER_SECONDS, LOG_DIR, CONVERT_TIMEOUT, MAX_CONCURRENCY
 from .logger import setup_logger
-from .models import ConvertRequest, ConvertResponse, StatusResponse, JobStatus, SystemStatusResponse
+from .models import ConvertResponse, StatusResponse, JobStatus, SystemStatusResponse
 from .queue import ConvertQueue
-from .converter import run_libreoffice_convert
+from .converter import run_libreoffice_convert, safe_filename
 
 
 log = setup_logger("app")
-app = FastAPI(title="OfficeToPDF API", description="Convert Office documents to PDF using LibreOffice")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    os.makedirs(LOG_DIR, exist_ok=True)
+    task = asyncio.create_task(cleanup_task())
+    try:
+        yield
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+
+app = FastAPI(
+    title="OfficeToPDF API",
+    description="Convert Office documents to PDF using LibreOffice",
+    lifespan=lifespan,
+)
 
 queue = ConvertQueue()
 
@@ -42,7 +62,7 @@ async def runner(job):
 async def convert_sync(file: UploadFile = File(...), convert_to: Optional[str] = Form(None)):
     # Create a job context but execute synchronously while honoring concurrency limit
     job = queue.create_job(infile_path="", convert_to=convert_to)
-    infile = os.path.join(job.outdir, "input", file.filename)
+    infile = os.path.join(job.outdir, "input", safe_filename(file.filename))
     await save_upload_to(infile, file)
     job.infile_path = infile
 
@@ -68,7 +88,7 @@ async def convert_sync(file: UploadFile = File(...), convert_to: Optional[str] =
 @app.post("/convert/async", response_model=ConvertResponse, dependencies=[Depends(require_api_key)])
 async def convert_async(file: UploadFile = File(...), convert_to: Optional[str] = Form(None)):
     job = queue.create_job(infile_path="", convert_to=convert_to)
-    infile = os.path.join(job.outdir, "input", file.filename)
+    infile = os.path.join(job.outdir, "input", safe_filename(file.filename))
     await save_upload_to(infile, file)
     job.infile_path = infile
 
@@ -177,13 +197,6 @@ async def cleanup_task():
         except Exception:
             pass
         await asyncio.sleep(60)
-
-
-@app.on_event("startup")
-async def on_startup():
-    os.makedirs(DATA_DIR, exist_ok=True)
-    os.makedirs(LOG_DIR, exist_ok=True)
-    asyncio.create_task(cleanup_task())
 
 
 # Serve a simple test UI

@@ -16,7 +16,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.converter import _find_output_file, _target_extension  # noqa: E402
+from app.converter import _find_output_file, _target_extension, safe_filename  # noqa: E402
 
 
 def test_target_extension_defaults_to_pdf():
@@ -53,6 +53,26 @@ def test_find_output_pdf_still_works():
 def test_find_output_missing_returns_none():
     with tempfile.TemporaryDirectory() as out_dir:
         assert _find_output_file("/somewhere/report.xlsx", out_dir, "html") is None
+
+
+def test_safe_filename_keeps_plain_names():
+    assert safe_filename("report.docx") == "report.docx"
+    assert safe_filename("my file (1).xlsx") == "my file (1).xlsx"
+
+
+def test_safe_filename_strips_traversal():
+    assert safe_filename("../../etc/passwd") == "passwd"
+    assert safe_filename("/etc/shadow") == "shadow"
+    assert safe_filename("..\\..\\windows\\system32\\x.dll") == "x.dll"
+    assert safe_filename("sub/dir/report.pdf") == "report.pdf"
+
+
+def test_safe_filename_handles_empty_and_dots():
+    assert safe_filename(None) == "upload"
+    assert safe_filename("") == "upload"
+    assert safe_filename("..") == "upload"
+    assert safe_filename(".") == "upload"
+    assert safe_filename("   ") == "upload"
 
 
 if __name__ == "__main__":

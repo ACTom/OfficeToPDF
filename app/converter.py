@@ -15,6 +15,18 @@ from .logger import setup_logger
 log = setup_logger("converter")
 
 
+def safe_filename(name: Optional[str]) -> str:
+    """Strip directory components from an uploaded filename to prevent path
+    traversal (e.g. '../../etc/passwd' or Windows-style '..\\..\\x'). Always
+    returns a bare filename that stays inside its intended directory.
+    """
+    candidate = (name or "").replace("\\", "/")
+    base = os.path.basename(candidate).strip()
+    if not base or base in {".", ".."}:
+        return "upload"
+    return base
+
+
 def _target_extension(convert_to: Optional[str]) -> str:
     """Derive the output file extension from a --convert-to value.
 
