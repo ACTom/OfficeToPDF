@@ -233,6 +233,14 @@ async def ui():
       const json = await res.json();
       document.getElementById('status_result').textContent = JSON.stringify(json, null, 2);
     }
+    function filenameFromResponse(res, fallback){
+      const cd = res.headers.get('Content-Disposition') || '';
+      let m = cd.match(/filename[*]=UTF-8''([^;]+)/i);
+      if(m){ try { return decodeURIComponent(m[1]); } catch(e) { return m[1]; } }
+      m = cd.match(/filename="?([^";]+)"?/i);
+      if(m) return m[1];
+      return fallback;
+    }
     function download(){
       const job_id = document.getElementById('job_id').value;
       const apikey = document.getElementById('apikey').value;
@@ -246,7 +254,7 @@ async def ui():
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `output-${job_id}.pdf`;
+        a.download = filenameFromResponse(res, `output-${job_id}`);
         document.body.appendChild(a);
         a.click();
         a.remove();
