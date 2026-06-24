@@ -44,4 +44,5 @@ ruff_cache/
 # Environment files
 .env
 .env.*
+!.env.sample
 .envrc
