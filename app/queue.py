@@ -2,6 +2,7 @@ import asyncio
 import os
 import shutil
 import signal
+import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Dict, Optional, List
@@ -40,7 +41,7 @@ class ConvertQueue:
         self.sem = asyncio.Semaphore(MAX_CONCURRENCY)
         self.jobs: Dict[str, Job] = {}
         self.pending: List[str] = []  # job ids in queued order
-        self.started_at = asyncio.get_event_loop().time()
+        self.started_at = time.monotonic()
 
     def create_job(self, infile_path: str, convert_to: Optional[str]) -> Job:
         job_id = str(uuid.uuid4())
@@ -105,12 +106,12 @@ class ConvertQueue:
             try:
                 job.outfile_path = await self._attempt_with_retries(job, runner)
                 job.status = JobStatus.done
-                job.finished_at = asyncio.get_event_loop().time()
+                job.finished_at = time.monotonic()
                 log.info(f"Job {job.id} finished: {job.outfile_path}")
             except Exception as e:
                 job.status = JobStatus.failed
                 job.message = str(e)
-                job.finished_at = asyncio.get_event_loop().time()
+                job.finished_at = time.monotonic()
                 log.error(f"Job {job.id} failed: {e}")
 
     async def _attempt_with_retries(self, job: Job, runner):
@@ -139,7 +140,7 @@ class ConvertQueue:
             job.outfile_path = None
             job.status = JobStatus.cleaned
             job.message = "Cleaned up after retention period"
-            job.finished_at = job.finished_at or asyncio.get_event_loop().time()
+            job.finished_at = job.finished_at or time.monotonic()
             if job_id in self.pending:
                 try:
                     self.pending.remove(job_id)
@@ -153,7 +154,7 @@ class ConvertQueue:
         # Remove job records to prevent unbounded memory growth
         if JOB_RECORD_TTL_SECONDS <= 0:
             return
-        now = asyncio.get_event_loop().time()
+        now = time.monotonic()
         to_delete: List[str] = []
         for jid, job in self.jobs.items():
             if job.status in {JobStatus.done, JobStatus.failed, JobStatus.cleaned}:

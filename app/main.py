@@ -136,7 +136,7 @@ async def health():
 @app.get("/system/status", response_model=SystemStatusResponse, dependencies=[Depends(require_api_key)])
 async def system_status():
     c = queue.counters()
-    now = asyncio.get_event_loop().time()
+    now = time.monotonic()
     uptime = int(now - queue.started_at)
     # disk usage stats
     def disk_stats(path: str):
